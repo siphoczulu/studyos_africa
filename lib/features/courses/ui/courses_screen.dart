@@ -13,11 +13,18 @@ class CoursesScreen extends StatefulWidget {
 class _CoursesScreenState extends State<CoursesScreen> {
   bool _isLoading = true;
   List<Course> _courses = const [];
+  final TextEditingController _courseNameController = TextEditingController();
 
   @override
   void initState() {
     super.initState();
     _loadCourses();
+  }
+
+  @override
+  void dispose() {
+    _courseNameController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadCourses() async {
@@ -38,18 +45,33 @@ class _CoursesScreenState extends State<CoursesScreen> {
   }
 
   Future<void> _showAddCourseDialog() async {
-    final controller = TextEditingController();
+    _courseNameController.clear();
     String? errorText;
 
     await showDialog<void>(
       context: context,
       builder: (context) {
+        Future<void> saveCourse(VoidCallback showValidationError) async {
+          final name = _courseNameController.text.trim();
+          if (name.isEmpty) {
+            showValidationError();
+            return;
+          }
+
+          await AppDb.instance.insertCourse(name);
+          if (!mounted) {
+            return;
+          }
+
+          Navigator.of(this.context).pop();
+        }
+
         return StatefulBuilder(
           builder: (context, setDialogState) {
             return AlertDialog(
               title: const Text('Add course'),
               content: TextField(
-                controller: controller,
+                controller: _courseNameController,
                 autofocus: true,
                 decoration: InputDecoration(
                   labelText: 'Course name',
@@ -57,19 +79,11 @@ class _CoursesScreenState extends State<CoursesScreen> {
                 ),
                 textInputAction: TextInputAction.done,
                 onSubmitted: (_) async {
-                  final name = controller.text.trim();
-                  if (name.isEmpty) {
+                  await saveCourse(() {
                     setDialogState(() {
                       errorText = 'Please enter a course name';
                     });
-                    return;
-                  }
-
-                  await AppDb.instance.insertCourse(name);
-                  if (!mounted) {
-                    return;
-                  }
-                  Navigator.of(context).pop();
+                  });
                 },
               ),
               actions: [
@@ -81,19 +95,11 @@ class _CoursesScreenState extends State<CoursesScreen> {
                 ),
                 FilledButton(
                   onPressed: () async {
-                    final name = controller.text.trim();
-                    if (name.isEmpty) {
+                    await saveCourse(() {
                       setDialogState(() {
                         errorText = 'Please enter a course name';
                       });
-                      return;
-                    }
-
-                    await AppDb.instance.insertCourse(name);
-                    if (!mounted) {
-                      return;
-                    }
-                    Navigator.of(context).pop();
+                    });
                   },
                   child: const Text('Save'),
                 ),
@@ -104,7 +110,7 @@ class _CoursesScreenState extends State<CoursesScreen> {
       },
     );
 
-    controller.dispose();
+    _courseNameController.clear();
     await _loadCourses();
   }
 
