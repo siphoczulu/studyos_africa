@@ -2,6 +2,7 @@ import 'package:path/path.dart';
 import 'package:sqflite/sqflite.dart';
 
 import '../../features/courses/data/course.dart';
+import '../../features/study_sessions/data/study_session.dart';
 
 class AppDb {
   AppDb._internal();
@@ -24,7 +25,7 @@ class AppDb {
 
     return openDatabase(
       path,
-      version: 1,
+      version: 2,
       onCreate: (db, version) async {
         await db.execute('''
 CREATE TABLE courses (
@@ -33,6 +34,28 @@ CREATE TABLE courses (
   created_at INTEGER NOT NULL
 );
 ''');
+        await db.execute('''
+CREATE TABLE study_sessions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  course_id INTEGER NOT NULL,
+  started_at INTEGER NOT NULL,
+  ended_at INTEGER NOT NULL,
+  duration_seconds INTEGER NOT NULL
+);
+''');
+      },
+      onUpgrade: (db, oldVersion, newVersion) async {
+        if (oldVersion < 2) {
+          await db.execute('''
+CREATE TABLE study_sessions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  course_id INTEGER NOT NULL,
+  started_at INTEGER NOT NULL,
+  ended_at INTEGER NOT NULL,
+  duration_seconds INTEGER NOT NULL
+);
+''');
+        }
       },
     );
   }
@@ -53,6 +76,42 @@ CREATE TABLE courses (
       },
       conflictAlgorithm: ConflictAlgorithm.abort,
     );
+  }
+
+  Future<int> insertStudySession({
+    required int courseId,
+    required int startedAt,
+    required int endedAt,
+    required int durationSeconds,
+  }) async {
+    final db = await database;
+    return db.insert(
+      'study_sessions',
+      {
+        'course_id': courseId,
+        'started_at': startedAt,
+        'ended_at': endedAt,
+        'duration_seconds': durationSeconds,
+      },
+      conflictAlgorithm: ConflictAlgorithm.abort,
+    );
+  }
+
+  Future<List<StudySession>> getStudySessions() async {
+    final db = await database;
+    final maps = await db.query('study_sessions', orderBy: 'id DESC');
+    return maps.map((map) => StudySession.fromMap(map)).toList();
+  }
+
+  Future<List<StudySession>> getStudySessionsForCourse(int courseId) async {
+    final db = await database;
+    final maps = await db.query(
+      'study_sessions',
+      where: 'course_id = ?',
+      whereArgs: [courseId],
+      orderBy: 'id DESC',
+    );
+    return maps.map((map) => StudySession.fromMap(map)).toList();
   }
 
   Future<int> deleteCourse(int id) async {
