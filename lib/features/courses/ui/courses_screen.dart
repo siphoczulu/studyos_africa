@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../../core/db/app_db.dart';
@@ -14,6 +16,10 @@ class _CoursesScreenState extends State<CoursesScreen> {
   bool _isLoading = true;
   List<Course> _courses = const [];
   final TextEditingController _courseNameController = TextEditingController();
+  Course? _activeCourse;
+  DateTime? _sessionStartedAt;
+  Timer? _ticker;
+  int _elapsedSeconds = 0;
 
   @override
   void initState() {
@@ -23,8 +29,82 @@ class _CoursesScreenState extends State<CoursesScreen> {
 
   @override
   void dispose() {
+    _ticker?.cancel();
     _courseNameController.dispose();
     super.dispose();
+  }
+
+  String _formatElapsed(int elapsedSeconds) {
+    final minutes = elapsedSeconds ~/ 60;
+    final seconds = elapsedSeconds % 60;
+    final paddedMinutes = minutes.toString().padLeft(2, '0');
+    final paddedSeconds = seconds.toString().padLeft(2, '0');
+    return '$paddedMinutes:$paddedSeconds';
+  }
+
+  void _startStudySession(Course course) {
+    if (_activeCourse != null) {
+      return;
+    }
+
+    _ticker?.cancel();
+    final startedAt = DateTime.now();
+
+    setState(() {
+      _activeCourse = course;
+      _sessionStartedAt = startedAt;
+      _elapsedSeconds = 0;
+    });
+
+    _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!mounted || _sessionStartedAt == null) {
+        return;
+      }
+
+      setState(() {
+        _elapsedSeconds = DateTime.now().difference(_sessionStartedAt!).inSeconds;
+      });
+    });
+  }
+
+  Future<void> _stopStudySession() async {
+    final activeCourse = _activeCourse;
+    final sessionStartedAt = _sessionStartedAt;
+    final courseId = activeCourse?.id;
+
+    _ticker?.cancel();
+    _ticker = null;
+
+    if (activeCourse == null || sessionStartedAt == null || courseId == null) {
+      if (mounted) {
+        setState(() {
+          _activeCourse = null;
+          _sessionStartedAt = null;
+          _elapsedSeconds = 0;
+        });
+      }
+      return;
+    }
+
+    final endedAt = DateTime.now();
+    final durationSeconds = endedAt.difference(sessionStartedAt).inSeconds;
+
+    await AppDb.instance.insertStudySession(
+      courseId: courseId,
+      startedAt: sessionStartedAt.millisecondsSinceEpoch,
+      endedAt: endedAt.millisecondsSinceEpoch,
+      durationSeconds: durationSeconds,
+    );
+
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _activeCourse = null;
+      _sessionStartedAt = null;
+      _elapsedSeconds = 0;
+    });
   }
 
   Future<void> _loadCourses() async {
@@ -151,6 +231,8 @@ class _CoursesScreenState extends State<CoursesScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final hasActiveSession = _activeCourse != null;
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Courses'),
@@ -166,15 +248,61 @@ class _CoursesScreenState extends State<CoursesScreen> {
           ? const Center(child: CircularProgressIndicator())
           : _courses.isEmpty
               ? const Center(child: Text('No courses yet'))
-              : ListView.builder(
-                  itemCount: _courses.length,
-                  itemBuilder: (context, index) {
-                    final course = _courses[index];
-                    return ListTile(
-                      title: Text(course.name),
-                      onLongPress: () => _confirmDelete(course),
-                    );
-                  },
+              : Column(
+                  children: [
+                    if (hasActiveSession)
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                        child: Card(
+                          child: Padding(
+                            padding: const EdgeInsets.all(16),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Text(
+                                        _activeCourse!.name,
+                                        style: Theme.of(context).textTheme.titleMedium,
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text('Elapsed: ${_formatElapsed(_elapsedSeconds)}'),
+                                    ],
+                                  ),
+                                ),
+                                FilledButton(
+                                  onPressed: _stopStudySession,
+                                  child: const Text('Stop'),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    Expanded(
+                      child: ListView.builder(
+                        itemCount: _courses.length,
+                        itemBuilder: (context, index) {
+                          final course = _courses[index];
+                          return ListTile(
+                            title: Text(course.name),
+                            trailing: IconButton(
+                              onPressed: hasActiveSession
+                                  ? null
+                                  : () => _startStudySession(course),
+                              icon: const Icon(Icons.play_arrow),
+                              tooltip: 'Start study session',
+                            ),
+                            onLongPress: hasActiveSession
+                                ? null
+                                : () => _confirmDelete(course),
+                          );
+                        },
+                      ),
+                    ),
+                  ],
                 ),
     );
   }
