@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/db/app_db.dart';
 import '../data/course.dart';
+import '../../study_sessions/data/study_session.dart';
 
 class CoursesScreen extends StatefulWidget {
   const CoursesScreen({super.key});
@@ -15,6 +16,7 @@ class CoursesScreen extends StatefulWidget {
 class _CoursesScreenState extends State<CoursesScreen> {
   bool _isLoading = true;
   List<Course> _courses = const [];
+  List<StudySession> _recentSessions = const [];
   final TextEditingController _courseNameController = TextEditingController();
   Course? _activeCourse;
   DateTime? _sessionStartedAt;
@@ -40,6 +42,16 @@ class _CoursesScreenState extends State<CoursesScreen> {
     final paddedMinutes = minutes.toString().padLeft(2, '0');
     final paddedSeconds = seconds.toString().padLeft(2, '0');
     return '$paddedMinutes:$paddedSeconds';
+  }
+
+  String _courseNameForSession(StudySession session) {
+    for (final course in _courses) {
+      if (course.id == session.courseId) {
+        return course.name;
+      }
+    }
+
+    return 'Unknown course';
   }
 
   void _startStudySession(Course course) {
@@ -105,6 +117,8 @@ class _CoursesScreenState extends State<CoursesScreen> {
       _sessionStartedAt = null;
       _elapsedSeconds = 0;
     });
+
+    await _loadCourses();
   }
 
   Future<void> _loadCourses() async {
@@ -113,6 +127,7 @@ class _CoursesScreenState extends State<CoursesScreen> {
     });
 
     final courses = await AppDb.instance.getCourses();
+    final sessions = await AppDb.instance.getStudySessions();
 
     if (!mounted) {
       return;
@@ -120,6 +135,7 @@ class _CoursesScreenState extends State<CoursesScreen> {
 
     setState(() {
       _courses = courses;
+      _recentSessions = sessions.take(5).toList();
       _isLoading = false;
     });
   }
@@ -232,6 +248,7 @@ class _CoursesScreenState extends State<CoursesScreen> {
   @override
   Widget build(BuildContext context) {
     final hasActiveSession = _activeCourse != null;
+    final hasCourses = _courses.isNotEmpty;
 
     return Scaffold(
       appBar: AppBar(
@@ -246,9 +263,7 @@ class _CoursesScreenState extends State<CoursesScreen> {
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
-          : _courses.isEmpty
-              ? const Center(child: Text('No courses yet'))
-              : Column(
+          : Column(
                   children: [
                     if (hasActiveSession)
                       Padding(
@@ -281,26 +296,59 @@ class _CoursesScreenState extends State<CoursesScreen> {
                           ),
                         ),
                       ),
-                    Expanded(
-                      child: ListView.builder(
-                        itemCount: _courses.length,
-                        itemBuilder: (context, index) {
-                          final course = _courses[index];
-                          return ListTile(
-                            title: Text(course.name),
-                            trailing: IconButton(
-                              onPressed: hasActiveSession
-                                  ? null
-                                  : () => _startStudySession(course),
-                              icon: const Icon(Icons.play_arrow),
-                              tooltip: 'Start study session',
-                            ),
-                            onLongPress: hasActiveSession
-                                ? null
-                                : () => _confirmDelete(course),
-                          );
-                        },
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          'Recent Sessions',
+                          style: Theme.of(context).textTheme.titleMedium,
+                        ),
                       ),
+                    ),
+                    if (_recentSessions.isEmpty)
+                      const Padding(
+                        padding: EdgeInsets.fromLTRB(16, 0, 16, 8),
+                        child: Align(
+                          alignment: Alignment.centerLeft,
+                          child: Text('No study sessions yet'),
+                        ),
+                      )
+                    else
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: Column(
+                          children: _recentSessions.map((session) {
+                            return ListTile(
+                              dense: true,
+                              title: Text(_courseNameForSession(session)),
+                              subtitle: Text(_formatElapsed(session.durationSeconds)),
+                            );
+                          }).toList(),
+                        ),
+                      ),
+                    Expanded(
+                      child: hasCourses
+                          ? ListView.builder(
+                              itemCount: _courses.length,
+                              itemBuilder: (context, index) {
+                                final course = _courses[index];
+                                return ListTile(
+                                  title: Text(course.name),
+                                  trailing: IconButton(
+                                    onPressed: hasActiveSession
+                                        ? null
+                                        : () => _startStudySession(course),
+                                    icon: const Icon(Icons.play_arrow),
+                                    tooltip: 'Start study session',
+                                  ),
+                                  onLongPress: hasActiveSession
+                                      ? null
+                                      : () => _confirmDelete(course),
+                                );
+                              },
+                            )
+                          : const Center(child: Text('No courses yet')),
                     ),
                   ],
                 ),
