@@ -16,7 +16,7 @@ class CoursesScreen extends StatefulWidget {
 class _CoursesScreenState extends State<CoursesScreen> {
   bool _isLoading = true;
   List<Course> _courses = const [];
-  List<StudySession> _recentSessions = const [];
+  List<StudySession> _sessions = const [];
   final TextEditingController _courseNameController = TextEditingController();
   Course? _activeCourse;
   DateTime? _sessionStartedAt;
@@ -54,6 +54,62 @@ class _CoursesScreenState extends State<CoursesScreen> {
     return 'Unknown course';
   }
 
+  List<StudySession> get _recentSessions => _sessions.take(5).toList();
+
+  _TodayPlanRecommendation? get _todayPlanRecommendation {
+    if (_courses.isEmpty) {
+      return null;
+    }
+
+    final latestSessionByCourseId = <int, StudySession>{};
+    for (final session in _sessions) {
+      final existing = latestSessionByCourseId[session.courseId];
+      if (existing == null || session.endedAt > existing.endedAt) {
+        latestSessionByCourseId[session.courseId] = session;
+      }
+    }
+
+    for (final course in _courses) {
+      final courseId = course.id;
+      if (courseId == null || !latestSessionByCourseId.containsKey(courseId)) {
+        return _TodayPlanRecommendation(
+          course: course,
+          subtitle: 'Never studied yet',
+        );
+      }
+    }
+
+    Course? recommendedCourse;
+    StudySession? oldestLatestSession;
+
+    for (final course in _courses) {
+      final courseId = course.id;
+      if (courseId == null) {
+        continue;
+      }
+
+      final latestSession = latestSessionByCourseId[courseId];
+      if (latestSession == null) {
+        continue;
+      }
+
+      if (oldestLatestSession == null ||
+          latestSession.endedAt < oldestLatestSession.endedAt) {
+        recommendedCourse = course;
+        oldestLatestSession = latestSession;
+      }
+    }
+
+    if (recommendedCourse == null) {
+      return null;
+    }
+
+    return _TodayPlanRecommendation(
+      course: recommendedCourse,
+      subtitle: 'Last studied in an earlier session',
+    );
+  }
+
   void _startStudySession(Course course) {
     if (_activeCourse != null) {
       return;
@@ -74,7 +130,9 @@ class _CoursesScreenState extends State<CoursesScreen> {
       }
 
       setState(() {
-        _elapsedSeconds = DateTime.now().difference(_sessionStartedAt!).inSeconds;
+        _elapsedSeconds = DateTime.now()
+            .difference(_sessionStartedAt!)
+            .inSeconds;
       });
     });
   }
@@ -135,7 +193,7 @@ class _CoursesScreenState extends State<CoursesScreen> {
 
     setState(() {
       _courses = courses;
-      _recentSessions = sessions.take(5).toList();
+      _sessions = sessions;
       _isLoading = false;
     });
   }
@@ -211,7 +269,8 @@ class _CoursesScreenState extends State<CoursesScreen> {
   }
 
   Future<void> _confirmDelete(Course course) async {
-    final shouldDelete = await showDialog<bool>(
+    final shouldDelete =
+        await showDialog<bool>(
           context: context,
           builder: (context) {
             return AlertDialog(
@@ -249,6 +308,7 @@ class _CoursesScreenState extends State<CoursesScreen> {
   Widget build(BuildContext context) {
     final hasActiveSession = _activeCourse != null;
     final hasCourses = _courses.isNotEmpty;
+    final todayPlan = _todayPlanRecommendation;
 
     return Scaffold(
       appBar: AppBar(
@@ -264,94 +324,135 @@ class _CoursesScreenState extends State<CoursesScreen> {
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : Column(
-                  children: [
-                    if (hasActiveSession)
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-                        child: Card(
-                          child: Padding(
-                            padding: const EdgeInsets.all(16),
-                            child: Row(
-                              children: [
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Text(
-                                        _activeCourse!.name,
-                                        style: Theme.of(context).textTheme.titleMedium,
-                                      ),
-                                      const SizedBox(height: 4),
-                                      Text('Elapsed: ${_formatElapsed(_elapsedSeconds)}'),
-                                    ],
+              children: [
+                if (hasActiveSession)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                    child: Card(
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    _activeCourse!.name,
+                                    style: Theme.of(
+                                      context,
+                                    ).textTheme.titleMedium,
                                   ),
-                                ),
-                                FilledButton(
-                                  onPressed: _stopStudySession,
-                                  child: const Text('Stop'),
-                                ),
-                              ],
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    'Elapsed: ${_formatElapsed(_elapsedSeconds)}',
+                                  ),
+                                ],
+                              ),
                             ),
+                            FilledButton(
+                              onPressed: _stopStudySession,
+                              child: const Text('Stop'),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                if (todayPlan != null)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+                    child: Card(
+                      child: ListTile(
+                        contentPadding: const EdgeInsets.all(16),
+                        title: const Text('Today Plan'),
+                        subtitle: Padding(
+                          padding: const EdgeInsets.only(top: 8),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                todayPlan.course.name,
+                                style: Theme.of(context).textTheme.titleMedium,
+                              ),
+                              const SizedBox(height: 4),
+                              Text(todayPlan.subtitle),
+                            ],
                           ),
                         ),
                       ),
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-                      child: Align(
-                        alignment: Alignment.centerLeft,
-                        child: Text(
-                          'Recent Sessions',
-                          style: Theme.of(context).textTheme.titleMedium,
-                        ),
-                      ),
                     ),
-                    if (_recentSessions.isEmpty)
-                      const Padding(
-                        padding: EdgeInsets.fromLTRB(16, 0, 16, 8),
-                        child: Align(
-                          alignment: Alignment.centerLeft,
-                          child: Text('No study sessions yet'),
-                        ),
-                      )
-                    else
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 8),
-                        child: Column(
-                          children: _recentSessions.map((session) {
-                            return ListTile(
-                              dense: true,
-                              title: Text(_courseNameForSession(session)),
-                              subtitle: Text(_formatElapsed(session.durationSeconds)),
-                            );
-                          }).toList(),
-                        ),
-                      ),
-                    Expanded(
-                      child: hasCourses
-                          ? ListView.builder(
-                              itemCount: _courses.length,
-                              itemBuilder: (context, index) {
-                                final course = _courses[index];
-                                return ListTile(
-                                  title: Text(course.name),
-                                  trailing: IconButton(
-                                    onPressed: hasActiveSession
-                                        ? null
-                                        : () => _startStudySession(course),
-                                    icon: const Icon(Icons.play_arrow),
-                                    tooltip: 'Start study session',
-                                  ),
-                                  onLongPress: hasActiveSession
-                                      ? null
-                                      : () => _confirmDelete(course),
-                                );
-                              },
-                            )
-                          : const Center(child: Text('No courses yet')),
+                  ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      'Recent Sessions',
+                      style: Theme.of(context).textTheme.titleMedium,
                     ),
-                  ],
+                  ),
                 ),
+                if (_recentSessions.isEmpty)
+                  const Padding(
+                    padding: EdgeInsets.fromLTRB(16, 0, 16, 8),
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text('No study sessions yet'),
+                    ),
+                  )
+                else
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Column(
+                      children: _recentSessions.map((session) {
+                        return ListTile(
+                          dense: true,
+                          title: Text(_courseNameForSession(session)),
+                          subtitle: Text(
+                            _formatElapsed(session.durationSeconds),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  ),
+                Expanded(
+                  child: hasCourses
+                      ? ListView.builder(
+                          itemCount: _courses.length,
+                          itemBuilder: (context, index) {
+                            final course = _courses[index];
+                            return ListTile(
+                              title: Text(course.name),
+                              trailing: IconButton(
+                                onPressed: hasActiveSession
+                                    ? null
+                                    : () => _startStudySession(course),
+                                icon: const Icon(Icons.play_arrow),
+                                tooltip: 'Start study session',
+                              ),
+                              onLongPress: hasActiveSession
+                                  ? null
+                                  : () => _confirmDelete(course),
+                            );
+                          },
+                        )
+                      : const Center(child: Text('No courses yet')),
+                ),
+              ],
+            ),
     );
   }
+}
+
+class _TodayPlanRecommendation {
+  const _TodayPlanRecommendation({
+    required this.course,
+    required this.subtitle,
+  });
+
+  final Course course;
+  final String subtitle;
 }
