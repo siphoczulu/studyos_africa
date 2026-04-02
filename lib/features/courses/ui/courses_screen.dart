@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../../core/db/app_db.dart';
 import '../data/course.dart';
 import '../../study_sessions/data/study_session.dart';
+import '../../timetable/ui/timetable_screen.dart';
 
 class CoursesScreen extends StatefulWidget {
   const CoursesScreen({super.key});
@@ -314,6 +315,17 @@ class _CoursesScreenState extends State<CoursesScreen> {
       appBar: AppBar(
         title: const Text('Courses'),
         actions: [
+          IconButton(
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => const TimetableScreen(),
+                ),
+              );
+            },
+            icon: const Icon(Icons.calendar_today),
+            tooltip: 'Weekly timetable',
+          ),
           IconButton(
             onPressed: _showAddCourseDialog,
             icon: const Icon(Icons.add),

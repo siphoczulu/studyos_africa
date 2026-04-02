@@ -3,6 +3,7 @@ import 'package:sqflite/sqflite.dart';
 
 import '../../features/courses/data/course.dart';
 import '../../features/study_sessions/data/study_session.dart';
+import '../../features/timetable/data/timetable_block.dart';
 
 class AppDb {
   AppDb._internal();
@@ -25,7 +26,7 @@ class AppDb {
 
     return openDatabase(
       path,
-      version: 2,
+      version: 3,
       onCreate: (db, version) async {
         await db.execute('''
 CREATE TABLE courses (
@@ -43,6 +44,15 @@ CREATE TABLE study_sessions (
   duration_seconds INTEGER NOT NULL
 );
 ''');
+        await db.execute('''
+CREATE TABLE timetable_blocks (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  course_id INTEGER NOT NULL,
+  weekday INTEGER NOT NULL,
+  start_minutes INTEGER NOT NULL,
+  end_minutes INTEGER NOT NULL
+);
+''');
       },
       onUpgrade: (db, oldVersion, newVersion) async {
         if (oldVersion < 2) {
@@ -53,6 +63,17 @@ CREATE TABLE study_sessions (
   started_at INTEGER NOT NULL,
   ended_at INTEGER NOT NULL,
   duration_seconds INTEGER NOT NULL
+);
+''');
+        }
+        if (oldVersion < 3) {
+          await db.execute('''
+CREATE TABLE timetable_blocks (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  course_id INTEGER NOT NULL,
+  weekday INTEGER NOT NULL,
+  start_minutes INTEGER NOT NULL,
+  end_minutes INTEGER NOT NULL
 );
 ''');
         }
@@ -68,14 +89,10 @@ CREATE TABLE study_sessions (
 
   Future<int> insertCourse(String name) async {
     final db = await database;
-    return db.insert(
-      'courses',
-      {
-        'name': name,
-        'created_at': DateTime.now().millisecondsSinceEpoch,
-      },
-      conflictAlgorithm: ConflictAlgorithm.abort,
-    );
+    return db.insert('courses', {
+      'name': name,
+      'created_at': DateTime.now().millisecondsSinceEpoch,
+    }, conflictAlgorithm: ConflictAlgorithm.abort);
   }
 
   Future<int> insertStudySession({
@@ -85,16 +102,12 @@ CREATE TABLE study_sessions (
     required int durationSeconds,
   }) async {
     final db = await database;
-    return db.insert(
-      'study_sessions',
-      {
-        'course_id': courseId,
-        'started_at': startedAt,
-        'ended_at': endedAt,
-        'duration_seconds': durationSeconds,
-      },
-      conflictAlgorithm: ConflictAlgorithm.abort,
-    );
+    return db.insert('study_sessions', {
+      'course_id': courseId,
+      'started_at': startedAt,
+      'ended_at': endedAt,
+      'duration_seconds': durationSeconds,
+    }, conflictAlgorithm: ConflictAlgorithm.abort);
   }
 
   Future<List<StudySession>> getStudySessions() async {
@@ -114,12 +127,37 @@ CREATE TABLE study_sessions (
     return maps.map((map) => StudySession.fromMap(map)).toList();
   }
 
+  Future<int> insertTimetableBlock({
+    required int courseId,
+    required int weekday,
+    required int startMinutes,
+    required int endMinutes,
+  }) async {
+    final db = await database;
+    return db.insert('timetable_blocks', {
+      'course_id': courseId,
+      'weekday': weekday,
+      'start_minutes': startMinutes,
+      'end_minutes': endMinutes,
+    }, conflictAlgorithm: ConflictAlgorithm.abort);
+  }
+
+  Future<List<TimetableBlock>> getTimetableBlocks() async {
+    final db = await database;
+    final maps = await db.query(
+      'timetable_blocks',
+      orderBy: 'weekday ASC, start_minutes ASC',
+    );
+    return maps.map((map) => TimetableBlock.fromMap(map)).toList();
+  }
+
+  Future<int> deleteTimetableBlock(int id) async {
+    final db = await database;
+    return db.delete('timetable_blocks', where: 'id = ?', whereArgs: [id]);
+  }
+
   Future<int> deleteCourse(int id) async {
     final db = await database;
-    return db.delete(
-      'courses',
-      where: 'id = ?',
-      whereArgs: [id],
-    );
+    return db.delete('courses', where: 'id = ?', whereArgs: [id]);
   }
 }
