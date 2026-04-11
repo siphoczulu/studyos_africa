@@ -2,6 +2,7 @@ import 'package:path/path.dart';
 import 'package:sqflite/sqflite.dart';
 
 import '../../features/courses/data/course.dart';
+import '../../features/file_library/data/study_file.dart';
 import '../../features/study_sessions/data/study_session.dart';
 import '../../features/timetable/data/timetable_block.dart';
 
@@ -26,7 +27,7 @@ class AppDb {
 
     return openDatabase(
       path,
-      version: 3,
+      version: 4,
       onCreate: (db, version) async {
         await db.execute('''
 CREATE TABLE courses (
@@ -53,6 +54,15 @@ CREATE TABLE timetable_blocks (
   end_minutes INTEGER NOT NULL
 );
 ''');
+        await db.execute('''
+CREATE TABLE study_files (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL,
+  path TEXT NOT NULL,
+  type TEXT NOT NULL,
+  created_at INTEGER NOT NULL
+);
+''');
       },
       onUpgrade: (db, oldVersion, newVersion) async {
         if (oldVersion < 2) {
@@ -74,6 +84,17 @@ CREATE TABLE timetable_blocks (
   weekday INTEGER NOT NULL,
   start_minutes INTEGER NOT NULL,
   end_minutes INTEGER NOT NULL
+);
+''');
+        }
+        if (oldVersion < 4) {
+          await db.execute('''
+CREATE TABLE study_files (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL,
+  path TEXT NOT NULL,
+  type TEXT NOT NULL,
+  created_at INTEGER NOT NULL
 );
 ''');
         }
@@ -149,6 +170,34 @@ CREATE TABLE timetable_blocks (
       orderBy: 'weekday ASC, start_minutes ASC',
     );
     return maps.map((map) => TimetableBlock.fromMap(map)).toList();
+  }
+
+  Future<int> insertStudyFile({
+    required String name,
+    required String path,
+    required String type,
+  }) async {
+    final db = await database;
+    return db.insert('study_files', {
+      'name': name,
+      'path': path,
+      'type': type,
+      'created_at': DateTime.now().millisecondsSinceEpoch,
+    }, conflictAlgorithm: ConflictAlgorithm.abort);
+  }
+
+  Future<List<StudyFile>> getStudyFiles() async {
+    final db = await database;
+    final maps = await db.query(
+      'study_files',
+      orderBy: 'created_at DESC',
+    );
+    return maps.map((map) => StudyFile.fromMap(map)).toList();
+  }
+
+  Future<int> deleteStudyFile(int id) async {
+    final db = await database;
+    return db.delete('study_files', where: 'id = ?', whereArgs: [id]);
   }
 
   Future<int> deleteTimetableBlock(int id) async {

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/db/app_db.dart';
 import '../data/course.dart';
+import '../../file_library/ui/file_library_screen.dart';
 import '../../study_sessions/data/study_session.dart';
 import '../../timetable/ui/timetable_screen.dart';
 
@@ -315,6 +316,17 @@ class _CoursesScreenState extends State<CoursesScreen> {
       appBar: AppBar(
         title: const Text('Courses'),
         actions: [
+          IconButton(
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => const FileLibraryScreen(),
+                ),
+              );
+            },
+            icon: const Icon(Icons.folder),
+            tooltip: 'File library',
+          ),
           IconButton(
             onPressed: () {
               Navigator.of(context).push(
