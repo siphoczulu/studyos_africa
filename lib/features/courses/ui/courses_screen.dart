@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/db/app_db.dart';
 import '../data/course.dart';
+import '../domain/today_plan_recommender.dart';
 import '../../file_library/ui/file_library_screen.dart';
 import '../../study_sessions/data/study_session.dart';
 import '../../timetable/ui/timetable_screen.dart';
@@ -59,56 +60,24 @@ class _CoursesScreenState extends State<CoursesScreen> {
   List<StudySession> get _recentSessions => _sessions.take(5).toList();
 
   _TodayPlanRecommendation? get _todayPlanRecommendation {
-    if (_courses.isEmpty) {
-      return null;
-    }
-
-    final latestSessionByCourseId = <int, StudySession>{};
-    for (final session in _sessions) {
-      final existing = latestSessionByCourseId[session.courseId];
-      if (existing == null || session.endedAt > existing.endedAt) {
-        latestSessionByCourseId[session.courseId] = session;
-      }
-    }
-
-    for (final course in _courses) {
-      final courseId = course.id;
-      if (courseId == null || !latestSessionByCourseId.containsKey(courseId)) {
-        return _TodayPlanRecommendation(
-          course: course,
-          subtitle: 'Never studied yet',
-        );
-      }
-    }
-
-    Course? recommendedCourse;
-    StudySession? oldestLatestSession;
-
-    for (final course in _courses) {
-      final courseId = course.id;
-      if (courseId == null) {
-        continue;
-      }
-
-      final latestSession = latestSessionByCourseId[courseId];
-      if (latestSession == null) {
-        continue;
-      }
-
-      if (oldestLatestSession == null ||
-          latestSession.endedAt < oldestLatestSession.endedAt) {
-        recommendedCourse = course;
-        oldestLatestSession = latestSession;
-      }
-    }
-
+    final recommendedCourse = TodayPlanRecommender.recommendCourse(
+      courses: _courses,
+      sessions: _sessions,
+    );
     if (recommendedCourse == null) {
       return null;
     }
 
+    final courseId = recommendedCourse.id;
+    final hasStudySession =
+        courseId != null &&
+        _sessions.any((session) => session.courseId == courseId);
+
     return _TodayPlanRecommendation(
       course: recommendedCourse,
-      subtitle: 'Last studied in an earlier session',
+      subtitle: hasStudySession
+          ? 'Last studied in an earlier session'
+          : 'Never studied yet',
     );
   }
 
