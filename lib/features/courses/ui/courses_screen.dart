@@ -316,11 +316,12 @@ class _CoursesScreenState extends State<CoursesScreen> {
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
-          : Column(
+          : ListView(
+              padding: const EdgeInsets.only(top: 8, bottom: 16),
               children: [
                 if (hasActiveSession)
                   Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
                     child: Card(
                       child: Padding(
                         padding: const EdgeInsets.all(16),
@@ -411,29 +412,33 @@ class _CoursesScreenState extends State<CoursesScreen> {
                       }).toList(),
                     ),
                   ),
-                Expanded(
-                  child: hasCourses
-                      ? ListView.builder(
-                          itemCount: _courses.length,
-                          itemBuilder: (context, index) {
-                            final course = _courses[index];
-                            return ListTile(
-                              title: Text(course.name),
-                              trailing: IconButton(
-                                onPressed: hasActiveSession
-                                    ? null
-                                    : () => _startStudySession(course),
-                                icon: const Icon(Icons.play_arrow),
-                                tooltip: 'Start study session',
-                              ),
-                              onLongPress: hasActiveSession
-                                  ? null
-                                  : () => _confirmDelete(course),
-                            );
-                          },
-                        )
-                      : const Center(child: Text('No courses yet')),
-                ),
+                if (hasCourses)
+                  ListView.builder(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    itemCount: _courses.length,
+                    itemBuilder: (context, index) {
+                      final course = _courses[index];
+                      return ListTile(
+                        title: Text(course.name),
+                        trailing: IconButton(
+                          onPressed: hasActiveSession
+                              ? null
+                              : () => _startStudySession(course),
+                          icon: const Icon(Icons.play_arrow),
+                          tooltip: 'Start study session',
+                        ),
+                        onLongPress: hasActiveSession
+                            ? null
+                            : () => _confirmDelete(course),
+                      );
+                    },
+                  )
+                else
+                  const Padding(
+                    padding: EdgeInsets.fromLTRB(16, 8, 16, 0),
+                    child: Text('No courses yet'),
+                  ),
               ],
             ),
     );
