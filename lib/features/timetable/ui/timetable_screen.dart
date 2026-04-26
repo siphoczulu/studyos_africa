@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../core/db/app_db.dart';
 import '../../courses/data/course.dart';
 import '../data/timetable_block.dart';
+import '../domain/timetable_time_parser.dart';
 
 class TimetableScreen extends StatefulWidget {
   const TimetableScreen({super.key});
@@ -213,27 +214,16 @@ class _AddTimetableBlockScreenState extends State<_AddTimetableBlockScreen> {
     super.dispose();
   }
 
-  int? _parseTime(String value) {
-    final match = RegExp(
-      r'^([01]\d|2[0-3]):([0-5]\d)$',
-    ).firstMatch(value.trim());
-    if (match == null) {
-      return null;
-    }
-
-    final hours = int.parse(match.group(1)!);
-    final minutes = int.parse(match.group(2)!);
-    return (hours * 60) + minutes;
-  }
-
   Future<void> _saveBlock() async {
     final isValid = _formKey.currentState?.validate() ?? false;
     if (!isValid || _selectedCourseId == null || _selectedWeekday == null) {
       return;
     }
 
-    final startMinutes = _parseTime(_startController.text)!;
-    final endMinutes = _parseTime(_endController.text)!;
+    final startMinutes = TimetableTimeParser.parseToMinutes(
+      _startController.text,
+    )!;
+    final endMinutes = TimetableTimeParser.parseToMinutes(_endController.text)!;
 
     await AppDb.instance.insertTimetableBlock(
       courseId: _selectedCourseId!,
@@ -327,7 +317,7 @@ class _AddTimetableBlockScreenState extends State<_AddTimetableBlockScreen> {
                   keyboardType: TextInputType.datetime,
                   textInputAction: TextInputAction.next,
                   validator: (value) {
-                    if (_parseTime(value ?? '') == null) {
+                    if (!TimetableTimeParser.isValidFormat(value ?? '')) {
                       return 'Enter a valid time as HH:MM';
                     }
                     return null;
@@ -346,13 +336,21 @@ class _AddTimetableBlockScreenState extends State<_AddTimetableBlockScreen> {
                     await _saveBlock();
                   },
                   validator: (value) {
-                    final endMinutes = _parseTime(value ?? '');
+                    final endMinutes = TimetableTimeParser.parseToMinutes(
+                      value ?? '',
+                    );
                     if (endMinutes == null) {
                       return 'Enter a valid time as HH:MM';
                     }
 
-                    final startMinutes = _parseTime(_startController.text);
-                    if (startMinutes != null && endMinutes <= startMinutes) {
+                    final startMinutes = TimetableTimeParser.parseToMinutes(
+                      _startController.text,
+                    );
+                    if (startMinutes != null &&
+                        !TimetableTimeParser.isEndAfterStart(
+                          startMinutes: startMinutes,
+                          endMinutes: endMinutes,
+                        )) {
                       return 'End time must be after start time';
                     }
 
